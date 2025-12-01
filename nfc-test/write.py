@@ -21,7 +21,19 @@ print(f"Found PN532 with firmware version: {ver}.{rev}")
 # Configure PN532 to read RFID/NFC tags
 pn532.SAM_configuration()
 
-data_to_write = "Hello, NFC Tag!"  # 16 bytes
+# Clear data before writing
+def clear_tag_data(start_block, num_blocks):
+    empty_data = b'\x00\x00\x00\x00'  # 4 bytes of zeros
+    print("Clearing tag data...")
+    for block in range(start_block, start_block + num_blocks):
+        try:
+            print(f"Clearing block {block}")
+            pn532.ntag2xx_write_block(block, empty_data)
+        except Exception as e:
+            print(f"Error clearing block {block}: {e}")
+            break
+
+data_to_write = "Atan"  # 16 bytes
 # Convert string to bytes
 data_bytes = data_to_write.encode('ascii')
 
@@ -39,6 +51,10 @@ while True:
         GPIO.output(LED_PIN, GPIO.HIGH)
         time.sleep(1)
 
+        # Clear data first (starting from block 4, clearing several blocks)
+        num_blocks_to_clear = (len(data_bytes) + 3) // 4  # Calculate how many blocks we need
+        clear_tag_data(4, num_blocks_to_clear)
+
         # Write in 4-byte chunks
         for i in range(0, len(data_bytes), 4):
             block_number = 4 + (i // 4)  # Start at block 4, increment every 4 bytes
@@ -47,5 +63,11 @@ while True:
             pn532.ntag2xx_write_block(block_number, chunk)
 
         print("Write successful! Remove the NFC tag.")
+        # Wait until tag is removed
+        while pn532.read_passive_target(timeout=0.5):
+            time.sleep(0.1)
+            
+        print("\nWaiting for next NFC tag...")
         GPIO.output(LED_PIN, GPIO.LOW)
-        time.sleep(1)
+
+    time.sleep(0.1)
